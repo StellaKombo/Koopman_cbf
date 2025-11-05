@@ -5,8 +5,7 @@
 clc; clear; clf; close all; addpath('../uav_sim_ros/codegen/','../uav_sim_ros/codegen/dynamics/','dynamics', 'controllers','koopman_learning','utils')
 
 %% Define experiment parameters:
-
-%State constraints and backup controller parameters:
+% State constraints and backup controller parameters:
 global Ts T_max x_bdry
 Ts = 0.01;                                               % Sampling interval
 T_max = 1;
@@ -43,7 +42,7 @@ fname = 'uav';
 
 %Koopman learning parameters:
 n = 16;
-func_dict = @(x) uav_D_eul_ge(x(1),x(2),x(3),x(4),x(5),x(6),x(7),x(8),x(9),x(10),...
+func_dict = @(x) uav_D_eul(x(1),x(2),x(3),x(4),x(5),x(6),x(7),x(8),x(9),x(10),...
          x(11),x(12),x(13),x(14),x(15),x(16));         % Function dictionary, returns [D,J] = [dictionary, jacobian of dictionary]
 
 n_samples = 250;                                         % Number of initial conditions to sample for training
@@ -51,7 +50,6 @@ gather_data = false;
 tune_fit = true;
 
 %% Learn approximated discrete-time Koopman operator:
-
 if gather_data == true
     [T_train, X_train] = collect_data(sim_dynamics, sim_process, backup_controller, controller_process, stop_crit1, initial_condition, n_samples, ts); 
     plot_training_data(X_train,n_samples)
@@ -89,8 +87,8 @@ end
 
 [K_pows, CK_pows] = precalc_matrix_powers(N_max,K,C);
 
-
-C_h = C(1:3,:);
+%C_h = C(1:3,:);
+C_h = C;
 non_cycl_spc = x_bdry(7:12,2) - x_bdry(7:12,1);
 mu_min = prod(non_cycl_spc)/((n_samples/Ts)^(1/length(non_cycl_spc)));
 n_lift = length(func_dict(ones(16,1)));
@@ -113,6 +111,14 @@ if gather_data == true
     save(['data/' fname '_test_data.mat'], 'T_test','X_test');
 else
     load(['data/' fname '_test_data.mat']);
+    for i = 1:length(X_test)
+        Xi = X_test{i};
+        if size(Xi,2) < 16
+            X_test{i} = [Xi, zeros(size(Xi,1), 16 - size(Xi,2))]; % pad with zeros
+        elseif size(Xi,2) > 16
+            X_test{i} = Xi(:,1:16); % truncate extras (defensive)
+        end
+    end
 end
 
 % Training data fit:
@@ -128,11 +134,16 @@ for i = 1 : 6
 end
 
 plot_fit_uav(T_train, X_train, T_test, X_test, K_pows, C, func_dict, error_bound, N_max, fname);
+plot_prediction_vs_truth(X_test, K_pows, C, func_dict, fname);
+plot_eigs_unit_circle(K, 'uav_edmd');
 
-save(['data/' fname '_learned_koopman.mat'], 'K_pows', 'CK_pows', 'C', 'N_max');
-
-
+save(['data/' fname '_learned_koopman_eul.mat'], 'K_pows', 'CK_pows', 'C', 'N_max');
 %% Supporting functions:
+set(groot,'defaulttextinterpreter','latex');
+set(groot,'defaultLegendInterpreter','latex');
+set(groot,'defaultAxesTickLabelInterpreter','latex');
+
+
 function plot_training_data(X,n_samples)
     global Ts
     n_plot = min(n_samples,100);
@@ -143,15 +154,16 @@ function plot_training_data(X,n_samples)
         tt = 0:Ts:(size(X{i},1)-1)*Ts;
         subplot(n_rows,n_cols,i)
         hold on
-        plot(tt,X{i}(:,1),'r')
-        plot(tt,X{i}(:,2),'b')
-        plot(tt,X{i}(:,3),'g')
-        plot(tt,X{i}(:,4),':r')
-        plot(tt,X{i}(:,5),':b')
-        plot(tt,X{i}(:,6),':g')
+        plot(tt,X{i}(:,1),'r', LineWidth=1.5)
+        plot(tt,X{i}(:,2),'b', LineWidth=1.5)
+        plot(tt,X{i}(:,3),'g', LineWidth=1.5)
+        plot(tt,X{i}(:,4),':r', LineWidth=1.5)
+        plot(tt,X{i}(:,5),':b', LineWidth=1.5)
+        plot(tt,X{i}(:,6),':g', LineWidth=1.5)
         if i == 3
             title('Position and attitude data')
         end
+        grid minor;
     end
 
     figure(2)
@@ -159,15 +171,16 @@ function plot_training_data(X,n_samples)
         tt = 0:Ts:(size(X{i},1)-1)*Ts;
         subplot(n_rows,n_cols,i)
         hold on
-        plot(tt,X{i}(:,7),'r')
-        plot(tt,X{i}(:,8),'b')
-        plot(tt,X{i}(:,9),'g')
-        plot(tt,X{i}(:,10),':r')
-        plot(tt,X{i}(:,11),':b')
-        plot(tt,X{i}(:,12),':g')
+        plot(tt,X{i}(:,7),'r', LineWidth=1.5)
+        plot(tt,X{i}(:,8),'b', LineWidth=1.5)
+        plot(tt,X{i}(:,9),'g', LineWidth=1.5)
+        plot(tt,X{i}(:,10),':r', LineWidth=1.5 )
+        plot(tt,X{i}(:,11),':b', LineWidth=1.5)
+        plot(tt,X{i}(:,12),':g', LineWidth=1.5)
         if i==3
             title('Linear and angular velocity data')
         end
+        grid minor;
     end
 
     figure(3)
@@ -175,13 +188,14 @@ function plot_training_data(X,n_samples)
         tt = 0:Ts:(size(X{i},1)-1)*Ts;
         subplot(n_rows,n_cols,i)
         hold on
-        plot(tt,X{i}(:,13),'r')
-        plot(tt,X{i}(:,14),'b')
-        plot(tt,X{i}(:,15),'g')
-        plot(tt,X{i}(:,16),'y')
+        plot(tt,X{i}(:,13),'r', LineWidth=1.5)
+        plot(tt,X{i}(:,14),'b', LineWidth=1.5)
+        plot(tt,X{i}(:,15),'g', LineWidth=1.5)
+        plot(tt,X{i}(:,16),'y', LineWidth=1.5)
         if i == 3
             title('Rotor speed data')
         end
+        grid minor;
     end
 end
 
@@ -215,7 +229,7 @@ function plot_fit_uav(T_train, X_train, T_test, X_test, K_pows, C, func_dict, er
             for k = 1 : length(X)
                 diff = (X{k}-X_hat{k})';
                 T{k} = 0 : Ts : (size(diff,2)-1)*Ts; %TODO: Fix data collection so that T is correct 
-                plot(T{k},diff(j,:))
+                plot(T{k},diff(j,:), LineWidth=1.5)
             end
             if j == 1
                 ylabel('$x-\hat{x}$ (m)');
@@ -235,11 +249,11 @@ function plot_fit_uav(T_train, X_train, T_test, X_test, K_pows, C, func_dict, er
         for k = 1 : length(X)
             diff = (X{k}-X_hat{k});
             T{k} = 0 : Ts : (size(diff,1)-1)*Ts; %TODO: Fix data collection so that T is correct 
-            plot(T{k},vecnorm(diff(:,2:4),2,2))
+            plot(T{k},vecnorm(diff(:,2:4),2,2),LineWidth=1.5)
+            grid minor;
         end
         xlabel('Time (sec)');
         ylabel('$||p-\hat{p}||$');
-        
     end
     
     saveas(fig,['figures/' fname '_fit.png']) 
@@ -257,3 +271,55 @@ function X_hat = predict_x(X, K_pows, C, func_dict)
         X_hat{i} = x_hat';
     end
 end
+
+function plot_prediction_vs_truth(X_test, K_pows, C, func_dict, fname)
+    global Ts
+    figure('Color','w');
+    idx = 1; % choose one test trajectory to visualize
+    x_true = X_test{idx};
+    x0 = x_true(1,:);
+    z0 = func_dict(x0);
+    x_pred = [x0'];
+    for j = 1 : size(x_true,1)-1
+        x_pred = [x_pred C*K_pows{j}*z0];
+    end
+    t = 0:Ts:(size(x_true,1)-1)*Ts;
+
+    % Position subplot
+    subplot(3,1,1); hold on; title('Position'); ylabel('m');
+    plot(t, x_true(:,1), 'r', 'LineWidth',1.5);
+    plot(t, x_pred(1,:), '--r', 'LineWidth',1.5);
+    plot(t, x_true(:,2), 'b', 'LineWidth',1.5);
+    plot(t, x_pred(2,:), '--b', 'LineWidth',1.5);
+    plot(t, x_true(:,3), 'g', 'LineWidth',1.5);
+    plot(t, x_pred(3,:), '--g', 'LineWidth',1.5);
+    legend({'x true','x pred','y true','y pred','z true','z pred'}, 'Location','best');
+    grid on;
+
+    % Linear velocity subplot
+    subplot(3,1,2); hold on; title('Linear Velocity'); ylabel('m/s');
+    plot(t, x_true(:,7), 'r', 'LineWidth',1.5);
+    plot(t, x_pred(7,:), '--r', 'LineWidth',1.5);
+    plot(t, x_true(:,8), 'b', 'LineWidth',1.5);
+    plot(t, x_pred(8,:), '--b', 'LineWidth',1.5);
+    plot(t, x_true(:,9), 'g', 'LineWidth',1.5);
+    plot(t, x_pred(9,:), '--g', 'LineWidth',1.5);
+    legend({'$v_x$ true','$v_x$ pred','$v_y$ true','$v_y$ pred','$v_z$ true','$v_z$ pred'}, 'Location','best');
+    grid on;
+
+    % Angular velocity subplot
+    subplot(3,1,3); hold on; title('Angular Velocity'); ylabel('rad/s'); xlabel('Time (s)');
+    plot(t, x_true(:,10), 'r', 'LineWidth',1.5);
+    plot(t, x_pred(10,:), '--r', 'LineWidth',1.5);
+    plot(t, x_true(:,11), 'b', 'LineWidth',1.5);
+    plot(t, x_pred(11,:), '--b', 'LineWidth',1.5);
+    plot(t, x_true(:,12), 'g', 'LineWidth',1.5);
+    plot(t, x_pred(12,:), '--g', 'LineWidth',1.5);
+    legend({'$\omega_x$ true','$\omega_x$ pred','$\omega_y$ true','$\omega_y$ pred','$\omega_z$ true','$\omega_z$ pred'}, ...
+       'Interpreter','latex','Location','best');    
+    grid on;
+
+    saveas(gcf, ['figures/' fname '_prediction_vs_truth.png']);
+end
+
+

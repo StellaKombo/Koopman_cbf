@@ -23,7 +23,7 @@ v = [x7;x8;x9];
 w = [x10;x11;x12];
 Omega = [x13;x14;x15;x16];
 
-D = [1;p;eul;v;w;Omega];
+D = [1;p;eul;v;w;Omega];  % Base states defined dictionary that are now reappeded
 
 % Ang vel terms:
 D = [D;

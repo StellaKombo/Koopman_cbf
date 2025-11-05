@@ -28,7 +28,7 @@ function L = calc_lipschitz(n, fun)
             
         obj = @(x) -norm(J_fun(x),2);
         
-        x_0 = x_bdry(:,1)+(x_bdry(:,2)-x_bdry(:,1)).*rand(4,1);
+        x_0 = x_bdry(:,1)+(x_bdry(:,2)-x_bdry(:,1)).*rand(size(x_bdry,1),1);
         x_tmp = fmincon(obj,x_0,[],[],[],[],lb,ub);
         
         L_row(i) = -obj(x_tmp);

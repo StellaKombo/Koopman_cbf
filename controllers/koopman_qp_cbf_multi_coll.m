@@ -35,8 +35,8 @@ function [u, int_time] = koopman_qp_cbf_multi_coll(x, u0, agent_ind, N, system_d
                     x_pert(l) = h;
                     db(l) = (barrier_func_collision(x_1+x_pert,x_2)-b)/h;
                 end
-                Aineq = [Aineq;-db'*qq*g];
-                bineq = [bineq;alpha*b+db'*qq*(f-f_cl)];
+                Aineq = [Aineq;-db'*qq*g]; % how much control input is needed
+                bineq = [bineq;alpha*b+db'*qq*(f-f_cl)];  % how much safety we can afford to loose
             end
         end
     end
